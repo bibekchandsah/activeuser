@@ -607,7 +607,7 @@ st.markdown(f"""
 # import streamlit as st
 
 # # Your GitHub Personal Access Token
-# GITHUB_TOKEN = "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"
+# GITHUB_TOKEN = "add_your_token_here"
 # DATA_URL = "https://raw.githubusercontent.com/bebedudu/keylogger/refs/heads/main/uploads/activeuserinfo.txt"
 # last_line = 10
 
